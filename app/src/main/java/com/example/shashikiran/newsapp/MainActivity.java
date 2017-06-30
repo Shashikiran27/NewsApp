@@ -1,25 +1,60 @@
 package com.example.shashikiran.newsapp;
 
+import android.app.ProgressDialog;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
+import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.TextView;
 import android.os.AsyncTask;
 
 
-import java.io.IOException;
-import java.net.URL;
+import org.json.JSONException;
 
-public class MainActivity extends AppCompatActivity {
+import java.io.IOException;
+import java.lang.reflect.Array;
+import java.net.URL;
+import java.util.ArrayList;
+
+public class MainActivity extends AppCompatActivity implements NewsAdapter.NewsAdapterOnClickHandler {
 
     private TextView mSearchResultsTextView;
+    private RecyclerView mRecyclerView;
+    private NewsAdapter mNewsAdapter;
+    private ArrayList<NewsItems> articlesList = new ArrayList<>();
+    private ProgressDialog pdialog;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        mSearchResultsTextView = (TextView) findViewById(R.id.news_app_search_results_json);
+
+
+
+        mRecyclerView = (RecyclerView) findViewById(R.id.recyclerview_news);
+        LinearLayoutManager layoutManager
+                = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
+        mRecyclerView.setLayoutManager(layoutManager);
+        mRecyclerView.setHasFixedSize(true);
+        mNewsAdapter = new NewsAdapter(this);
+        mRecyclerView.setAdapter(mNewsAdapter);
+    }
+
+    @Override
+
+    public void onClick(String url) {
+        Uri webpage = Uri.parse(url);
+        Intent intent = new Intent(Intent.ACTION_VIEW, webpage);
+        if (intent.resolveActivity(getPackageManager()) != null) {
+            startActivity(intent);
+        }
+
     }
 
 
@@ -28,28 +63,45 @@ public class MainActivity extends AppCompatActivity {
         new NewsAppQueryTask().execute(newsAppSearchUrl);
     }
 
-    public class NewsAppQueryTask extends AsyncTask<URL, Void, String> {
+    public class NewsAppQueryTask extends AsyncTask<URL, Void, ArrayList<NewsItems>> {
 
         @Override
-        protected String doInBackground(URL... params) {
-            URL searchUrl = params[0];
-            String newsAppSearchResults = null;
+        protected void onPreExecute() {
+            super.onPreExecute();
+            pdialog = new ProgressDialog(MainActivity.this);
+            pdialog.setMessage("Loading data...");
+            pdialog.setIndeterminate(false);
+            pdialog.show();
+        }
+
+        @Override
+        protected ArrayList<NewsItems> doInBackground(URL... params) {
+            String jsonResults;
+            ArrayList<NewsItems> results = null;
             try {
-                newsAppSearchResults = NetworkUtils.getResponseFromHttpUrl(searchUrl);
+                jsonResults = NetworkUtils.getResponseFromHttpUrl(params[0]);
+                results = NetworkUtils.parseJSON(jsonResults);
             } catch (IOException e) {
                 e.printStackTrace();
+            } catch (JSONException e) {
+                e.printStackTrace();
             }
-            return newsAppSearchResults;
+            return results;
         }
+
 
         @Override
-        protected void onPostExecute(String newsAppSearchResults) {
-            if (newsAppSearchResults != null && !newsAppSearchResults.equals("")) {
-                mSearchResultsTextView.setText(newsAppSearchResults);
-            }
+        protected void onPostExecute(final ArrayList<NewsItems> data) {
 
+            if(data != null){
+                mNewsAdapter.setNewsData(data);
+            }
+            pdialog.dismiss();
         }
+
     }
+
+
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -59,12 +111,13 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        int itemThatWasClickedId = item.getItemId();
-        if (itemThatWasClickedId == R.id.action_search) {
-            makeNewsAppQuery();
+
+        int id = item.getItemId();
+        if (id == R.id.action_search) {
+            new NewsAppQueryTask().execute(NetworkUtils.buildUrl());
             return true;
         }
-        return super.onOptionsItemSelected(item);
 
+        return super.onOptionsItemSelected(item);
     }
 }
